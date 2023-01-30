@@ -2,7 +2,6 @@
 
 ## Einleitung
 Nach der Migration des [Cloudogu EcoSystem](https://cloudogu.com/de/ecosystem/) auf [Kubernetes](https://cloudogu.com/de/glossar/kubernetes/) sollen unter anderem auch Backups wieder unterstützt werden.
-
 Im Open Source Bereich ist [Velero](https://velero.io) als Tool für Cluster Backups praktisch alternativlos.
 Es kann alle K8s-Ressourcen, aber auch Volume Daten sichern.
 Backups lassen sich mit Schedules automatisch ausführen.
