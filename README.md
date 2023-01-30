@@ -3,7 +3,7 @@
 ## Einleitung
 Nach der Migration des [Cloudogu EcoSystem](https://cloudogu.com/de/ecosystem/) auf [Kubernetes](https://cloudogu.com/de/glossar/kubernetes/) sollen unter anderem auch Backups wieder unterstützt werden.
 
-Im Open Source Bereich ist Velero als Tool für Cluster Backups praktisch alternativlos.
+Im Open Source Bereich ist [Velero](https://velero.io) als Tool für Cluster Backups praktisch alternativlos.
 Es kann alle K8s-Ressourcen, aber auch Volume Daten sichern.
 Backups lassen sich mit Schedules automatisch ausführen.
 Erweiterbar ist es durch [Plugins](https://velero.io/docs/main/custom-plugins): So lässt sich zum Beispiel auch ein [S3 Bucket anbinden](https://github.com/vmware-tanzu/velero-plugin-for-aws).
@@ -50,12 +50,8 @@ Auch dies erfolgt automatisch durch das Velero-CSI-Plugin.
 
 ### Voraussetzungen
 - Git
-- Docker
-- [kubectl](https://kubernetes.io/de/docs/tasks/tools/install-kubectl/)
-- [kind (Kubernetes in Docker)](https://kind.sigs.k8s.io/docs/user/quick-start/)
-- [Helm](https://helm.sh/docs/intro/install/)
-
-Nützlich ist zum Beobachten unseres Clusters ist außerdem [K9s](https://k9scli.io/).
+- [VirtualBox](https://www.virtualbox.org/wiki/Downloads)
+- [Vagrant](https://developer.hashicorp.com/vagrant/downloads)
 
 ### Repository klonen
 ```shell
@@ -66,11 +62,25 @@ Alle weiteren Befehle werden im Hauptverzeichnis des Repositories ausgeführt.
 
 ### Cluster aufsetzen
 
-Für unser Beispiel verwenden wir ein kind Cluster.
-Dieses kann wie folgt aufgesetzt werden:
+Für unser Beispiel verwenden wir ein K3s Cluster, dieses kann folgendermaßen gestartet werden:
 ```shell
-kind create cluster --config src/cluster-config.yaml
+vagrant up
 ```
+
+Nun verbinden wir uns per SSH auf mit dem Cluster:
+```shell
+vagrant ssh
+
+$ cd /vagrant
+```
+Alle weiteren Befehle werden dann in der SSH-Session im `/vagrant`-Verzeichnis ausgeführt.
+
+Natürlich ist es auch möglich, ein eigenes Cluster zu verwenden.
+
+> **Notiz:** Longhorn funktioniert nicht mit K3d oder KIND  
+> Ich habe sowohl K3d (K3s in Docker) als auch KIND (Kubernetes in Docker) ausprobiert.
+> Jedoch [funktioniert `iscsi` nicht in Containern](https://github.com/longhorn/longhorn/discussions/2702),
+> weswegen Longhorn dort nicht funktioniert.
 
 ### MinIO einrichten
 Ein lokales MinIO lässt sich mit folgendem Befehl starten:
@@ -90,7 +100,7 @@ Wir legen zwei Buckets an: `longhorn` und `velero`.
 Außerdem erstellen wir einen Access Key.
 In unserem Beispiel sieht dieser so aus:
 - Key ID: `test-key`
-- Secret Key: `secret-test-key`.
+- Secret Key: `test-secret-key`.
 
 ### Longhorn
 
@@ -108,10 +118,8 @@ helm install longhorn \
     --version 1.4.0
 ```
 
-Nun sollten nach und nach die Pods im `longhorn-system` Namespace starten.  
-Falls es zu Problemen kommt, sollte überprüft werden,
-ob [open-iscsi](https://longhorn.io/docs/1.4.0/deploy/install/#installing-open-iscsi) und
-der [NFSv4 client](https://longhorn.io/docs/1.4.0/deploy/install/#installing-nfsv4-client) installiert und aktiviert sind.
+Nun sollten nach und nach die Pods im `longhorn-system` Namespace starten.
+Dazu ist das Tool `k9s` sehr praktisch, welches auf der VM schon vorinstalliert ist.
 
 #### Longhorn konfigurieren
 Bei der Installation haben wir Longhorn schon so konfiguriert, dass es die Zugangsdaten für den Ablageort des Backups aus dem `minio-secret` liest.
@@ -127,11 +135,13 @@ kubectl apply -f src/longhorn-minio-secret.yaml
 
 ### Snapshot Controller und CSI Snapshot CRDs
 Um CSI Snapshots erstellen zu können, werden ein Snapshot-Controller und die CSI Snapshot CRDs benötigt.
-Da KIND diese standardmäßig nicht installiert hat, müssen wir diese manuell installieren:
+Da K3s diese standardmäßig nicht installiert hat, müssen wir diese manuell installieren:
 ```shell
-kubectl -n kube-system create -k "git@github.com:kubernetes-csi/external-snapshotter/client/config/crd?ref=release-6.2"
-kubectl -n kube-system create -k "git@github.com:kubernetes-csi/external-snapshotter/deploy/kubernetes/snapshot-controller?ref=release-6.2"
+kubectl -n kube-system create -k "github.com/kubernetes-csi/external-snapshotter/client/config/crd?ref=release-5.0"
+kubectl -n kube-system create -k "github.com/kubernetes-csi/external-snapshotter/deploy/kubernetes/snapshot-controller?ref=release-5.0"
 ```
+
+> **Notiz:** Versionen des Snapshot-Controllers neuer als Version 5.0 [werden von Longhorn bisher noch nicht unterstützt](https://github.com/longhorn/longhorn-manager/pull/1518#discussion_r991818681).
 
 Damit Longhorn für die Snapshots verwendet wird, müssen wir eine `VolumeSnapshotClass` anlegen.
 Diese sieht folgendermaßen aus:
@@ -164,6 +174,14 @@ kubectl apply -f src/default-volumesnapshotclass.yaml
 #### Velero CLI
 
 Das Velero CLI installieren wir wie in der [offiziellen Dokumentation](https://velero.io/docs/v1.10/basic-install/#option-2-github-release) angegeben über das [GitHub Release](https://github.com/vmware-tanzu/velero/releases/tag/v1.10.0).
+
+In unserem Fall:
+```shell
+VELERO_VERSION=v1.10.0; \
+    wget -c https://github.com/vmware-tanzu/velero/releases/download/${VELERO_VERSION}/velero-${VELERO_VERSION}-linux-amd64.tar.gz -O - \
+    | tar -xz -C /tmp/ \
+    && sudo mv /tmp/velero-${VELERO_VERSION}-linux-amd64/velero /usr/local/bin
+```
 
 #### Velero Server
 
@@ -234,11 +252,3 @@ Wenn alles funktioniert hat, sollte folgender Befehl uns nun `Hello from Velero!
 ```shell
 kubectl -n csi-app exec -ti csi-nginx -- bash -c 'cat /mnt/longhorndisk/hello'
 ```
-
-## Findings
-
-### Longhorn funktioniert nicht mit K3d
-Ich habe zunächst versucht, K3d (K3s in Docker) statt KIND zu verwenden.
-Jedoch hat dort die Installation von Longhorn nicht funktioniert,
-wahrscheinlich wegen fehlendem [open-iscsi](https://longhorn.io/docs/1.4.0/deploy/install/#installing-open-iscsi)
-und [NFSv4 client](https://longhorn.io/docs/1.4.0/deploy/install/#installing-nfsv4-client).

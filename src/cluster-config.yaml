@@ -1,8 +1,0 @@
-kind: Cluster
-apiVersion: kind.x-k8s.io/v1alpha4
-name: velero-longhorn-demo
-# One control plane node and one "worker".
-# The worker is needed for Longhorn to create replicas.
-nodes:
-  - role: control-plane
-  - role: worker
