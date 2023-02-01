@@ -1,13 +1,15 @@
 # Cluster Backups mit Velero & Longhorn
 
 ## Einleitung
-Nach der Migration des [Cloudogu EcoSystem](https://cloudogu.com/de/ecosystem/) auf [Kubernetes](https://cloudogu.com/de/glossar/kubernetes/) sollen unter anderem auch Backups wieder unterstützt werden.
-Im Open Source Bereich ist [Velero](https://velero.io) als Tool für Cluster Backups praktisch alternativlos.
-Es kann alle K8s-Ressourcen, aber auch Volume Daten sichern.
+Aktuell arbeiten wir daran, das [Cloudogu EcoSystem](https://cloudogu.com/de/ecosystem/) auf Kubernetes zu migrieren.
+Da auch das bisherigen Cloudogu EcoSystem Backups und Restores unterstützt, soll dies in Zukunft auch möglich sein.
+
+Für unsere Zwecke ist [Velero](https://velero.io) praktisch alternativlos.
+Es kann alle K8s-Ressourcen, aber auch Volume-Daten sichern.
 Backups lassen sich mit Schedules automatisch ausführen.
 Erweiterbar ist es durch [Plugins](https://velero.io/docs/main/custom-plugins): So lässt sich zum Beispiel auch ein [S3 Bucket anbinden](https://github.com/vmware-tanzu/velero-plugin-for-aws).
-Wer einen anderen Storage Provider als den Cluster-Internen benutzt, also zum Beispiel Longhorn,
-der kann diesen mit einem [Plugin für das Container-Storage-Interface](https://github.com/vmware-tanzu/velero-plugin-for-csi) (im Folgenden CSI) anbinden.
+Wer einen anderen Storage-Provider als den Cluster-Internen benutzt, also zum Beispiel Longhorn,
+der kann diesen mit einem [Plugin für das Container-Storage-Interface (CSI)](https://github.com/vmware-tanzu/velero-plugin-for-csi) anbinden.
 
 Im Folgenden wollen wir genau dies tun:
 Wir installieren Longhorn und Velero.
@@ -17,62 +19,57 @@ Beides konfigurieren wir so, dass wir Backups von Teilen unseres Clusters inklus
 
 ![Schaubild, das die Funktionsweise von Velero mit Longhorn darstellt](figures/Velero%20Longhorn%20Backups.drawio.svg "Schaubild: Funktionsweise von Velero")
 
-Bei Velero handelt es sich um einen [Kubernetes Operator](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/).
-Ein Operator hört auf das Erstellen, Ändern und Löschen [bestimmter Kubernetes Ressourcen](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/), und verarbeitet diese.
+Bei Velero handelt es sich um einen [Kubernetes-Operator](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/).
+Ein Operator hört auf das Erstellen, Ändern und Löschen [bestimmter Kubernetes-Ressourcen](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/), und verarbeitet diese.
 Velero hört beispielsweise auf Ressourcen vom Typ [`velero.io/v1/Backup`](https://velero.io/docs/main/api-types/backup/) und [`velero.io/v1/Restore`](https://velero.io/docs/main/api-types/restore/).
 
 Damit diese Ressourcen nicht manuell angelegt werden müssen, kommt Velero mit einem kleinen CLI-Tool, welches diese Aufgabe übernimmt.
 
 ### Backup
-Wird also der Befehl `velero backup create <backup-name>` aufgerufen, wird eine neue [Backup-Ressource](https://velero.io/docs/main/api-types/backup/) mit dem angegebenen Namen angelegt.
-Der Velero Server erkennt die angelegte Ressource und startet den Backup-Prozess.
-Alle im Backup angegebenen Ressourcen werden gesammelt und gespeichert.
-Soll das Backup außerhalb des Clusters gespeichert werden, muss ein Object Store Plugin eingebunden werden.
-In unserem Fall ist es das [Velero Plugin for AWS](https://github.com/vmware-tanzu/velero-plugin-for-aws), welches die Daten auf ein S3 Bucket schreibt.
+Der Befehl `velero backup create <backup-name>` legt eine neue [Backup-Ressource](https://velero.io/docs/main/api-types/backup/) mit dem angegebenen Namen an.
+Der Velero-Server erkennt die angelegte Ressource und startet den Backup-Prozess,
+der alle im Backup angegebenen Ressourcen sammelt und speichert.
+Zur Speicherung des Backups außerhalb des Clusters können wir ein Object-Store-Plugin einbinden.
+In unserem Fall ist es das [Velero-Plugin-for-AWS](https://github.com/vmware-tanzu/velero-plugin-for-aws), welches die Daten auf ein S3-Bucket schreibt.
 
-#### Doch was passiert mit den Volume Daten?
-Verwendet man ganz normale Kubernetes Volumes, werden diese zusammen mit den anderen Ressourcen von Velero in das MinIO Bucket geschrieben.  
+#### Doch was passiert mit den Volume-Daten?
+Verwendet man ganz normale Kubernetes-Volumes, schreibt Velero diese zusammen mit den anderen Ressourcen in das MinIO-Bucket.  
 Da wir jedoch Longhorn verwenden, ist dies nicht möglich.
-Allerdings unterstützt Longhorn das Container Storage Interface, welches es uns ermöglicht, Longhorn mitzuteilen, dass es ein Backup erstellen soll.  
-Hier kommt das [Velero Plugin for CSI](https://github.com/vmware-tanzu/velero-plugin-for-csi) ins Spiel:
+Allerdings unterstützt Longhorn das Container-Storage-Interface, über welches Velero Longhorn mitteilen kann, dass es ein Backup erstellen soll.  
+Hier kommt das [Velero-Plugin-for-CSI](https://github.com/vmware-tanzu/velero-plugin-for-csi) ins Spiel:
 Es erstellt einen [`VolumeSnapshot`](https://kubernetes.io/docs/concepts/storage/volume-snapshots/), was Longhorn dazu veranlasst, ein Backup zu erstellen.
-Wenn Longhorn nun richtig konfiguriert ist, wird dieses Backup in ein S3 Bucket geschrieben.
+Wenn Longhorn nun richtig konfiguriert ist, schreibt es dieses Backup in ein S3-Bucket.
 
 ### Restore
-Wird der Befehl `velero restore create --from-backup <backup-name>` aufgerufen, wird eine neue [Restore-Ressource](https://velero.io/docs/main/api-types/restore/) vom angegebenen Backup angelegt.
-Die Ressource wird von Velero erkannt und das entsprechende Backup aus dem S3 Bucket gezogen.
+Der Befehl `velero restore create --from-backup <backup-name>` legt eine neue [Restore-Ressource](https://velero.io/docs/main/api-types/restore/) vom angegebenen Backup an.
+Velero erkennt die Ressource und wendet das entsprechende Backup aus dem S3-Bucket auf das Cluster an.
 
 Um das Backup der Volumes einzuspielen, muss die `dataSource` des `PersistentVolumeClaims` auf den entsprechenden `VolumeSnapshot` zeigen, anstatt auf ein `PersistentVolume`.
-Auch dies erfolgt automatisch durch das Velero-CSI-Plugin.
+Auch das übernimmt das Velero-CSI-Plugin.
 
 ## Anleitung
 
 ### Voraussetzungen
 - Git
 - [VirtualBox](https://www.virtualbox.org/wiki/Downloads)
-- [Vagrant](https://developer.hashicorp.com/vagrant/downloads)
+- [Vagrant](https://developer.hashicorp.com/vagrant/downloads) >= 2.3.4
 
 ### Repository klonen
 ```shell
-git clone git@github.com:cloudogu/velero-longhorn-demo.git
+git clone git@github.com:cloudogu/velero-longhorn-demo.git && cd velero-longhorn-demo
 ```
-
-Alle weiteren Befehle werden im Hauptverzeichnis des Repositories ausgeführt.
 
 ### Cluster aufsetzen
 
-Für unser Beispiel verwenden wir ein K3s Cluster, dieses kann folgendermaßen gestartet werden:
+Für unser Beispiel verwenden wir ein K3s-Cluster, dieses wird folgendermaßen gestartet:
 ```shell
 vagrant up
 ```
 
-Nun verbinden wir uns per SSH auf mit dem Cluster:
+Nun verbinden wir uns per SSH mit dem Cluster:
 ```shell
 vagrant ssh
-
-$ cd /vagrant
 ```
-Alle weiteren Befehle werden dann in der SSH-Session im `/vagrant`-Verzeichnis ausgeführt.
 
 Natürlich ist es auch möglich, ein eigenes Cluster zu verwenden.
 
@@ -92,20 +89,18 @@ docker run -d --name minio \
     server /data --console-address ":9090"
 ```
 
-Jetzt können wir die MinIO Administration unter http://localhost:9000 öffnen.
-Anmelden kann man sich mit den in den obigen Umgebungsvariablen angegebenen Credentials.
+Jetzt können wir die MinIO-Administration unter http://localhost:9000 öffnen.
+Anmelden können wir uns mit den in den obigen Umgebungsvariablen angegebenen Credentials.
 
 Wir legen zwei Buckets an: `longhorn` und `velero`.  
-Außerdem erstellen wir einen Access Key.
-In unserem Beispiel sieht dieser so aus:
+Außerdem erstellen wir einen Access-Key:
 - Key ID: `test-key`
 - Secret Key: `test-secret-key`.
 
 ### Longhorn
 
 #### Longhorn installieren
-Longhorn installieren wir nach der [offiziellen Installationsanweisung](https://longhorn.io/docs/1.4.0/deploy/install/).  
-In unserem Fall sieht das so aus:
+Longhorn installieren wir nach der [offiziellen Installationsanweisung](https://longhorn.io/docs/1.4.0/deploy/install/):
 ```shell
 helm repo add longhorn https://charts.longhorn.io
 helm repo update
@@ -113,36 +108,43 @@ helm install longhorn \
     longhorn/longhorn \
     --namespace longhorn-system \
     --create-namespace \
-    --values src/longhorn-values.yaml \
+    --values /vagrant/src/longhorn-values.yaml \
     --version 1.4.0
 ```
 
+In der [`longhorn-values.yaml`](src/longhorn-values.yaml) konfigurieren wir auch das Backup-Target von Longhorn, sodass Longhorn die Volume Backups auf das S3 schreibt.
+In der Praxis können wir dies aber auch im Nachhinein z.B. über die Longhorn-UI konfigurieren.
+
 Nun sollten nach und nach die Pods im `longhorn-system` Namespace starten.
-Dazu ist das Tool `k9s` sehr praktisch, welches auf der VM schon vorinstalliert ist.
+Um das Cluster zu beobachten, ist das Tool `k9s` sehr praktisch, welches auf der VM schon vorinstalliert ist.
 
 #### Longhorn konfigurieren
 Bei der Installation haben wir Longhorn schon so konfiguriert, dass es die Zugangsdaten für den Ablageort des Backups aus dem `minio-secret` liest.
 Dieses Secret müssen wir nun noch anwenden:
 ```shell
-kubectl apply -f src/longhorn-minio-secret.yaml
+kubectl apply -f /vagrant/src/longhorn-minio-secret.yaml
 ```
 
-> **Notiz:** Im Secret benutzen wir die IP `172.17.0.1`, um den Host zu erreichen.
-> Dies funktioniert allerdings nur unter Linux und
-> wenn sich das KIND cluster im `docker0` Netzwerk befindet (default).
-> Unter Windows und Mac kann `host.docker.internal` verwendet werden.
+> **Notiz:** Im Secret benutzen wir die IP `172.17.0.1`, um den Host zu erreichen.  
+> Ob dies möglich ist, hängt von der Container-Runtime und Netzwerk-Konfiguration ab.
 
-### Snapshot Controller und CSI Snapshot CRDs
-Um CSI Snapshots erstellen zu können, werden ein Snapshot-Controller und die CSI Snapshot CRDs benötigt.
-Da K3s diese standardmäßig nicht installiert hat, müssen wir diese manuell installieren:
+### Snapshot-Controller und CSI-Snapshot-CRDs
+Um CSI-Snapshots zu erstellen, benötigen wir einen Snapshot-Controller und die CSI-Snapshot-CRDs.
+Da diese auf K3s standardmäßig nicht installiert sind, müssen wir sie manuell installieren:
 ```shell
 kubectl -n kube-system create -k "github.com/kubernetes-csi/external-snapshotter/client/config/crd?ref=release-5.0"
 kubectl -n kube-system create -k "github.com/kubernetes-csi/external-snapshotter/deploy/kubernetes/snapshot-controller?ref=release-5.0"
 ```
 
-> **Notiz:** Versionen des Snapshot-Controllers neuer als Version 5.0 [werden von Longhorn bisher noch nicht unterstützt](https://github.com/longhorn/longhorn-manager/pull/1518#discussion_r991818681).
+> **Notiz:** [Longhorn unterstützt bisher keine Versionen des Snapshot-Controllers neuer als 5.0.](https://github.com/longhorn/longhorn-manager/pull/1518#discussion_r991818681)
 
-Damit Longhorn für die Snapshots verwendet wird, müssen wir eine `VolumeSnapshotClass` anlegen.
+
+Die `VolumeSnapshotClass` wenden wir nun also gegen das Cluster an:
+```shell
+kubectl apply -f /vagrant/src/default-volumesnapshotclass.yaml
+```
+
+Damit der Snapshot-Controller Longhorn für die Snapshots verwendet, müssen wir eine `VolumeSnapshotClass` anlegen.
 Diese sieht folgendermaßen aus:
 ```yaml
 kind: VolumeSnapshotClass
@@ -157,24 +159,17 @@ parameters:
   type: bak
 ```
 
-Damit auch Velero bei den `VolumeSnapshots` Longhorn verwendet, müssen wir das Label `velero.io/csi-volumesnapshot-class: "true"` anhängen.
+Damit Velero die `VolumeSnapshots` mit unserer `VolumeSnapshotClass` erstellt, benötigen wir das Label `velero.io/csi-volumesnapshot-class: "true"`.
 
-Unter `parameters` geben wir `type: bak` an, was Longhorn sagt, dass wir ein Longhorn Backup machen möchten.
-Eine Alternative wäre `type: snap` für Longhorn Snapshots (inkrementelle Backups, nicht zu verwechseln mit den `VolumeSnapshots`).
+Unter `parameters` geben wir `type: bak` an, was Longhorn sagt, dass wir ein Longhorn-Backup machen möchten.
+Eine Alternative wäre `type: snap` für Longhorn-Snapshots (inkrementelle Backups, nicht zu verwechseln mit den `VolumeSnapshots`).
 Diese haben jedoch bisher noch keine CSI-Unterstützung, können also hier nicht verwendet werden.
-
-Die `VolumeSnapshotClass` wenden wir nun also gegen das Cluster an:
-```shell
-kubectl apply -f src/default-volumesnapshotclass.yaml
-```
 
 ### Velero
 
-#### Velero CLI
+#### Velero-CLI
 
-Das Velero CLI installieren wir wie in der [offiziellen Dokumentation](https://velero.io/docs/v1.10/basic-install/#option-2-github-release) angegeben über das [GitHub Release](https://github.com/vmware-tanzu/velero/releases/tag/v1.10.0).
-
-In unserem Fall:
+Das Velero-CLI installieren wir wie in der [offiziellen Dokumentation](https://velero.io/docs/v1.10/basic-install/#option-2-github-release) angegeben über das [GitHub Release](https://github.com/vmware-tanzu/velero/releases/tag/v1.10.0).:
 ```shell
 VELERO_VERSION=v1.10.0; \
     wget -c https://github.com/vmware-tanzu/velero/releases/download/${VELERO_VERSION}/velero-${VELERO_VERSION}-linux-amd64.tar.gz -O - \
@@ -182,16 +177,16 @@ VELERO_VERSION=v1.10.0; \
     && sudo mv /tmp/velero-${VELERO_VERSION}-linux-amd64/velero /usr/local/bin
 ```
 
-#### Velero Server
+#### Velero-Server
 
-Velero kann folgendermaßen mit Helm installiert werden:
+Velero installieren wir mit Helm:
 ```shell
 helm repo add vmware-tanzu https://vmware-tanzu.github.io/helm-charts
 helm repo update
 helm install velero \
     --namespace=velero \
     --create-namespace \
-    --set-file credentials.secretContents.cloud=src/credentials-velero \
+    --set-file credentials.secretContents.cloud=/vagrant/src/credentials-velero \
     --set configuration.provider=aws \
     --set configuration.backupStorageLocation.name=default \
     --set configuration.backupStorageLocation.bucket=velero \
@@ -215,16 +210,15 @@ helm install velero \
 ```
 
 Wir konfigurieren hier auch direkt schon die Plugins für S3 und CSI.
-Die MinIO Credentials werden dabei direkt aus der Datei [`src/credentials-velero`](src/credentials-velero) ausgelesen.
+Die MinIO-Credentials werden dabei direkt aus der Datei [`src/credentials-velero`](src/credentials-velero) ausgelesen.
 `snapshotEnabled=true` und `configuration.features=EnableCSI` sind beide nötig um die CSI `VolumeSnapshot` Unterstützung zu aktivieren.
-Wie wir sehen können, sind Velero Plugins als `InitContainer` umgesetzt.
 
 ### Testen von Backup und Restore
 
 Um Backup und Restore zu testen, installieren wir eine kleine Testanwendung.
-Diese besteht aus einem simplen Pod, der ein Longhorn Volume aus einem PVC mountet.
+Diese besteht aus einem simplen Pod, der ein Longhorn-Volume aus einem PVC mountet.
 ```shell
-kubectl apply -f src/example-app.yaml
+kubectl apply -f /vagrant/src/example-app.yaml
 ```
 
 Nun schreiben wir `Hello from Velero!` in eine Datei im Volume:
@@ -251,3 +245,15 @@ Wenn alles funktioniert hat, sollte folgender Befehl uns nun `Hello from Velero!
 ```shell
 kubectl -n csi-app exec -ti csi-nginx -- bash -c 'cat /mnt/longhorndisk/hello'
 ```
+
+## Fazit
+
+Velero ist ein gutes und ausgereiftes Tool um Cluster Backups zu erstellen.
+Durch das Container-Storage-Interface ist es unabhängig vom Storage-Provider, solange dieser CSI unterstützt.
+
+Ein Feature, welches Velero noch nicht unterstützt, sind Backups mit Ende-zu-Ende-Verschlüsselung.
+Da Velero Open-Source ist, ist eine Erweiterung in diese Richtung jedoch nicht ausgeschlossen.
+Falls dies passiert, könnt ihr euch auf einen weiteren Blog-Post freuen!
+
+Rundum macht die asynchrone Funktionsweise und die Operator-Architektur Velero wie geschaffen dafür, in andere Produkte integriert zu werden.
+Deswegen glauben wir von Cloudogu, dass Velero die beste Backup-Lösung für das [Cloudogu K8s-EcoSystem](https://github.com/cloudogu/k8s-ecosystem/) ist.
