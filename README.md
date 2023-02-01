@@ -255,5 +255,5 @@ Ein Feature, welches Velero noch nicht unterstützt, sind Backups mit Ende-zu-En
 Da Velero Open-Source ist, ist eine Erweiterung in diese Richtung jedoch nicht ausgeschlossen.
 Falls dies passiert, könnt ihr euch auf einen weiteren Blog-Post freuen!
 
-Rundum macht die asynchrone Funktionsweise und die Operator-Architektur Velero wie geschaffen dafür, in andere Produkte integriert zu werden.
+Dank asynchroner Funktionsweise sowie der Operator-Architektur integriert sich Velero hervorragend in andere Produkte.
 Deswegen glauben wir von Cloudogu, dass Velero die beste Backup-Lösung für das [Cloudogu K8s-EcoSystem](https://github.com/cloudogu/k8s-ecosystem/) ist.
