@@ -1,21 +1,20 @@
 # Cluster Backups mit Velero & Longhorn
 
-## Einleitung
+## Warum Verlero?
 Aktuell arbeiten wir daran, das [Cloudogu EcoSystem](https://cloudogu.com/de/ecosystem/) auf Kubernetes zu migrieren.
-Da auch das bisherigen Cloudogu EcoSystem Backups und Restores unterstützt, soll dies in Zukunft auch möglich sein.
+Da das bisherige Cloudogu EcoSystem Backups und Restores unterstützt, soll dies auch nach der Umstellung auf Kubernetes möglich sein.
 
 Für unsere Zwecke ist [Velero](https://velero.io) praktisch alternativlos.
 Es kann alle K8s-Ressourcen, aber auch Volume-Daten sichern.
 Backups lassen sich mit Schedules automatisch ausführen.
 Erweiterbar ist es durch [Plugins](https://velero.io/docs/main/custom-plugins): So lässt sich zum Beispiel auch ein [S3 Bucket anbinden](https://github.com/vmware-tanzu/velero-plugin-for-aws).
-Wer einen anderen Storage-Provider als den Cluster-Internen benutzt, also zum Beispiel Longhorn,
-der kann diesen mit einem [Plugin für das Container-Storage-Interface (CSI)](https://github.com/vmware-tanzu/velero-plugin-for-csi) anbinden.
+Wer wie wir mit Longhorn einen anderen Storage-Provider als den Cluster-Internen benutzt, der kann diesen ganz einfach mit einem [Plugin für das Container-Storage-Interface (CSI)](https://github.com/vmware-tanzu/velero-plugin-for-csi) anbinden.
 
 Im Folgenden wollen wir genau dies tun:
 Wir installieren Longhorn und Velero.
 Beides konfigurieren wir so, dass wir Backups von Teilen unseres Clusters inklusive Volume-Daten auf ein S3 (in unserem Fall MinIO) schreiben können.
 
-## Funktionsweise
+## Funktionsweise von Backup & Restore
 
 ![Schaubild, das die Funktionsweise von Velero mit Longhorn darstellt](figures/Velero%20Longhorn%20Backups.drawio.svg "Schaubild: Funktionsweise von Velero")
 
@@ -47,7 +46,7 @@ Velero erkennt die Ressource und wendet das entsprechende Backup aus dem S3-Buck
 Um das Backup der Volumes einzuspielen, muss die `dataSource` des `PersistentVolumeClaims` auf den entsprechenden `VolumeSnapshot` zeigen, anstatt auf ein `PersistentVolume`.
 Auch das übernimmt das Velero-CSI-Plugin.
 
-## Anleitung
+## Anleitung für Backup & Restore mit Velero und Longhorn
 
 ### Voraussetzungen
 - Git
