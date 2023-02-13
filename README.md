@@ -10,7 +10,7 @@ Backups lassen sich mit Schedules automatisch ausführen.
 Erweiterbar ist es durch [Plugins](https://velero.io/docs/main/custom-plugins): So lässt sich zum Beispiel auch ein [S3 Bucket anbinden](https://github.com/vmware-tanzu/velero-plugin-for-aws).
 Wer wie wir mit Longhorn einen anderen Storage-Provider als den Cluster-Internen benutzt, der kann diesen ganz einfach mit einem [Plugin für das Container-Storage-Interface (CSI)](https://github.com/vmware-tanzu/velero-plugin-for-csi) anbinden.
 
-Im Folgenden wollen wir genau dies tun:
+Im Folgenden werden wir genau dies tun:
 Wir installieren Longhorn und Velero.
 Beides konfigurieren wir so, dass wir Backups von Teilen unseres Clusters inklusive Volume-Daten auf ein S3 (in unserem Fall MinIO) schreiben können.
 
@@ -128,6 +128,7 @@ kubectl apply -f /vagrant/src/longhorn-minio-secret.yaml
 
 > **Notiz:** Im Secret benutzen wir die IP `172.17.0.1`, um den Host zu erreichen.  
 > Ob dies möglich ist, hängt von der Container-Runtime und Netzwerk-Konfiguration ab.
+> In einem echten Szenario würde dieses Backup aber sowieso an einem anderen Ort liegen.
 
 ### Snapshot-Controller und CSI-Snapshot-CRDs
 Um CSI-Snapshots zu erstellen, benötigen wir einen Snapshot-Controller und die CSI-Snapshot-CRDs.
@@ -169,7 +170,7 @@ Diese haben jedoch bisher noch keine CSI-Unterstützung, können also hier nicht
 
 #### Velero-CLI
 
-Das Velero-CLI installieren wir wie in der [offiziellen Dokumentation](https://velero.io/docs/v1.10/basic-install/#option-2-github-release) angegeben über das [GitHub Release](https://github.com/vmware-tanzu/velero/releases/tag/v1.10.0).:
+Das Velero-CLI installieren wir wie in der [offiziellen Dokumentation](https://velero.io/docs/v1.10/basic-install/#option-2-github-release) angegeben über das [GitHub Release](https://github.com/vmware-tanzu/velero/releases/tag/v1.10.0):
 ```shell
 VELERO_VERSION=v1.10.0; \
     wget -c https://github.com/vmware-tanzu/velero/releases/download/${VELERO_VERSION}/velero-${VELERO_VERSION}-linux-amd64.tar.gz -O - \
@@ -209,7 +210,7 @@ helm install velero \
     vmware-tanzu/velero
 ```
 
-Wir konfigurieren hier auch direkt schon die Plugins für S3 und CSI.
+Wir konfigurieren hier auch schon die Plugins für S3 und CSI.
 Die MinIO-Credentials werden dabei direkt aus der Datei [`src/credentials-velero`](src/credentials-velero) ausgelesen.
 `snapshotEnabled=true` und `configuration.features=EnableCSI` sind beide nötig um die CSI `VolumeSnapshot` Unterstützung zu aktivieren.
 
