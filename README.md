@@ -48,7 +48,7 @@ Auch das übernimmt das Velero-CSI-Plugin.
 
 ## Anleitung für Backup & Restore mit Velero und Longhorn
 
-Alle in der Anleitung referenzierten Dateien findet ihr [auf GitHub](https://github.com/cloudogu/velero-longhorn-demo).
+Alle Dateien und Beispiele sind verfügbar [auf GitHub](https://github.com/cloudogu/velero-longhorn-demo).
 
 ### Voraussetzungen
 - Git
