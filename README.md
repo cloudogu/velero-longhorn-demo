@@ -138,12 +138,11 @@ kubectl -n kube-system create -k "github.com/kubernetes-csi/external-snapshotter
 > **Notiz:** [Longhorn unterstützt bisher keine Versionen des Snapshot-Controllers neuer als 5.0.](https://github.com/longhorn/longhorn-manager/pull/1518#discussion_r991818681)
 
 
-Die `VolumeSnapshotClass` wenden wir nun also gegen das Cluster an:
+Damit der Snapshot-Controller Longhorn für die Snapshots verwendet, müssen wir eine `VolumeSnapshotClass` anlegen:
 ```shell
 kubectl apply -f /vagrant/src/default-volumesnapshotclass.yaml
 ```
 
-Damit der Snapshot-Controller Longhorn für die Snapshots verwendet, müssen wir eine `VolumeSnapshotClass` anlegen.
 Diese sieht folgendermaßen aus:
 ```yaml
 kind: VolumeSnapshotClass
